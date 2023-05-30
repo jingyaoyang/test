@@ -1,0 +1,121 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        //环境
+        "env":{
+        "type":"string",
+        "defaultValue":"uat",
+        "allowedValues":[
+          "uat",
+          "prod"
+          ]
+      },
+      //缓存名称
+      "RedisName": {
+        "type": "string",
+        "defaultValue": ""
+        
+      },
+      //所有者
+      "Owner": {
+        "type": "string",
+        "defaultValue": ""
+        
+      }
+  
+    },
+    "variables": {
+     "RedisName":"[format('{0}{1}{2}',parameters('RedisName'),'-',parameters('env'))]",
+      "privateEndpointsName":"[format('{0}{1}{2}{3}{4}',parameters('RedisName'),'-','Redis','-',parameters('env'))]",
+      "GroupName": "[resourceGroup().name]"
+    },
+
+   "resources": [
+     {
+            "type": "Microsoft.Cache/Redis",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('RedisName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+              "Owner": "[parameters('Owner')]",
+                "Project": "[parameters('RedisName')]"
+            },
+            "properties": {
+                "redisVersion": "6.0",
+                "sku": {
+                    //缓存类型
+                    "name": "[if(equals(parameters('env'), 'uat'), 'basic', 'Standard' )]",
+                    "family": "C",
+                    "capacity": "[if(equals(parameters('env'), 'uat'), int('0'),int('1'))]"
+                },
+                "enableNonSslPort": false,
+                "publicNetworkAccess": "Disabled",
+                "redisConfiguration": {
+                    "maxmemory-reserved": "125",
+                    "maxfragmentationmemory-reserved": "125",
+                    "maxmemory-delta": "125"
+                }
+            }
+        },
+        
+        //网络接口
+    {
+            "type": "Microsoft.Network/privateEndpoints",
+            "apiVersion": "2022-11-01",
+            "name": "[variables('privateEndpointsName')]",
+            "location": "eastasia",
+            "properties": {
+                "privateLinkServiceConnections": [
+                    {
+                        "name": "[variables('privateEndpointsName')]",
+                        "id": "[concat(resourceId('Microsoft.Network/privateEndpoints',variables('privateEndpointsName')), concat('/privateLinkServiceConnections/', variables('privateEndpointsName')))]",
+                        "properties": {
+                            "privateLinkServiceId": "[resourceId(variables('GroupName'),'Microsoft.Cache/Redis',variables('RedisName'))]",
+                            "groupIds": [
+                                "redisCache"
+                            ],
+                            "privateLinkServiceConnectionState": {
+                                "status": "Approved",
+                                "description": "Auto-Approved",
+                                "actionsRequired": "None"
+                            }
+                        }
+                    }
+                ],
+                "manualPrivateLinkServiceConnections": [],
+                "customNetworkInterfaceName": "[concat(variables('privateEndpointsName'), '-nic')]",
+                //子网
+                "subnet": {
+                   "id": "[resourceId('gz_hub', 'Microsoft.Network/virtualNetworks/subnets/', 'gz_hub', 'PrivateEndPoint')]"
+                },
+                "ipConfigurations": [],
+                "customDnsConfigs": []
+            },
+             "dependsOn": [
+        "[resourceId('Microsoft.Cache/Redis', variables('RedisName'))]"
+      
+      ]
+        },
+        {
+            "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+            "apiVersion": "2022-11-01",
+            "name": "[concat(variables('privateEndpointsName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointsName'))]"
+            ],
+            "properties": {
+                "privateDnsZoneConfigs": [
+                    {
+                        "name": "privatelink-redis-cache-windows-net",
+                        "properties": {
+                             "privateDnsZoneId": "[resourceId('gz_hub', 'Microsoft.Network/privateDnsZones','privatelink.redis.cache.windows.net')]"
+                        }
+                    }
+                ]
+            }
+        }
+       
+
+    ]
+}

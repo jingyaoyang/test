@@ -1,0 +1,108 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+     //环境
+        "env":{
+        "type":"string",
+        "defaultValue":"uat",
+        "allowedValues":[
+          "uat",
+          "prod"
+          ]
+      },
+      //服务名称撤销撤销撤销
+    "serverName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+      //用户名
+    "adminLogin": {
+      "type": "string"
+    },
+    //密码
+    "Password": {
+      "type": "securestring"
+    },
+   //数据库版本
+    "version": {
+      "type": "string",
+      "defaultValue": "8.0.21",
+      "allowedValues": [
+        "5.7",
+        "8.0.21"
+      ],
+      "metadata": {
+        "description": "Server version"
+      }
+    },
+    //虚拟网络类型
+    "virtualNetworkName": {
+        "type": "string",
+        "defaultValue": "gz_dev",
+        "allowedValues": [
+        "gz_dev",
+        "gz_prd"
+        
+      ],
+        "metadata": {
+          "description": "Name of the virtual network"
+        }
+      },
+      //子网
+       "subnetName": {
+        "type": "string",
+        "defaultValue": "gz_dev_gateway",
+        "allowedValues": [
+         "gz_dev_mysql",
+         "gz_prd_mysql"
+        
+      ],
+        "metadata": {
+          "description": "Name of the subnet备注"
+        }
+      },
+       
+      //所有者
+      "Owner": {
+        "type": "string",
+        "defaultValue": ""
+        
+      }
+  },
+
+   "variables": {
+     "MysqlName":"[format('{0}{1}{2}',parameters('serverName'),'-',parameters('env'))]"
+   },
+      
+  "resources": [
+    {
+      "type": "Microsoft.DBforMySQL/flexibleServers",
+      "apiVersion": "2021-12-01-preview",
+      "name": "[variables('MysqlName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+                "Owner": "[parameters('Owner')]",
+                "Project": "[parameters('serverName')]"
+            },
+      "sku": {
+        "name": "Standard_B1s",
+        "tier": "Burstable"
+      },
+      "properties": {
+        "version": "[parameters('version')]",
+        "administratorLogin": "[parameters('adminLogin')]",
+        "administratorLoginPassword": "[parameters('Password')]",
+          "network": {
+                    "publicNetworkAccess": "Disabled",
+                    "delegatedSubnetResourceId": "[resourceId(parameters('virtualNetworkName'), 'Microsoft.Network/virtualNetworks/subnets/', parameters('virtualNetworkName'), parameters('subnetName'))]",
+                    "privateDnsZoneResourceId": "[resourceId('gz_hub', 'Microsoft.Network/privateDnsZones','privatelink.mysql.database.azure.com')]"
+                },
+        "backup": {
+          "backupRetentionDays": 7,
+          "geoRedundantBackup": "Disabled"
+        }
+      }
+    }
+  ]
+}
